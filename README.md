@@ -89,10 +89,10 @@ All tests should pass, demonstrating:
 
 ## References
 
-- [Axon Framework 5 Documentation](https://docs.axoniq.io/)
 - [Axon Framework 5 Command Handlers](https://docs.axoniq.io/axon-framework-reference/5.0/commands/command-handlers/)
 - [Axon Framework 5 Event Publishing](https://docs.axoniq.io/axon-framework-reference/5.0/events/event-publishing/)
-- [University Demo Reference Project](https://github.com/AxonIQ/university-demo)
+- [Axon Framework 5 Processing Context](https://docs.axoniq.io/axon-framework-reference/5.0/messaging-concepts/processing-context/)
+- [Axon Framework 5 Event Processors](https://docs.axoniq.io/axon-framework-reference/5.0/events/event-processors/)
 
 ## License
 
