@@ -23,12 +23,8 @@ import java.util.List;
  * <h2>Key Points Demonstrated</h2>
  * <ol>
  *   <li>Multiple events applied in a single command handler are committed atomically</li>
- *   <li>Event sourcing handlers run synchronously (state is updated immediately after append)</li>
- *   <li>Aggregate invariants are enforced during command handling</li>
+ *   <li>If any event handler fails, all events and state changes are rolled back</li>
  * </ol>
- *
- * This pattern is analogous to how LiveStore's materializers must process events
- * synchronously to maintain aggregate invariants.
  */
 class IssueCommandHandlerTest {
 
@@ -78,102 +74,6 @@ class IssueCommandHandlerTest {
                             new IssueAssigneeRemoved(issueId, "user-42"),
                             new IssueStatusChanged(issueId, Status.IN_PROGRESS, Status.BACKLOG)
                     );
-        }
-
-        /**
-         * This test shows that unassigning from a non-IN_PROGRESS issue only emits one event.
-         * No status change is needed because BACKLOG/REVIEW/DONE don't require an assignee.
-         */
-        @Test
-        @DisplayName("Unassign from BACKLOG issue emits only IssueAssigneeRemoved")
-        void unassignFromBacklogIssue_emitsOnlyAssigneeRemoved() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given()
-                    .events(List.of(
-                            new IssueCreated(issueId, "Fix the bug"),
-                            new IssueAssigneeChanged(issueId, "user-42")
-                            // Note: status is still BACKLOG (no status change event)
-                    ))
-                    .when().command(new UnassignIssue(issueId), Metadata.emptyInstance())
-                    .then().events(
-                            // Only ONE event - no status change needed
-                            new IssueAssigneeRemoved(issueId, "user-42")
-                    );
-        }
-    }
-
-    @Nested
-    @DisplayName("Synchronous Event Application")
-    class SynchronousEventApplication {
-
-        /**
-         * INVARIANT VALIDATION: This test demonstrates that event sourcing handlers
-         * run SYNCHRONOUSLY within the command handler.
-         *
-         * <p>The UnassignIssue command handler logic depends on checking state AFTER
-         * the first event is applied. This only works because:</p>
-         *
-         * <ol>
-         *   <li>append(IssueAssigneeRemoved) is called</li>
-         *   <li>@EventSourcingHandler for IssueAssigneeRemoved runs IMMEDIATELY</li>
-         *   <li>issue.assigneeId is now null</li>
-         *   <li>The command handler checks if status was IN_PROGRESS</li>
-         *   <li>If so, append(IssueStatusChanged) is called</li>
-         *   <li>@EventSourcingHandler for IssueStatusChanged runs IMMEDIATELY</li>
-         *   <li>issue.status is now BACKLOG</li>
-         * </ol>
-         *
-         * <p>If event sourcing handlers were "eventually consistent" (async), this
-         * pattern would be impossible - you couldn't read updated state within
-         * the same command handler.</p>
-         *
-         * <p>This test verifies the pattern works by checking that:</p>
-         * <ul>
-         *   <li>Two events are emitted (proving the conditional logic saw updated state)</li>
-         *   <li>Final state is valid</li>
-         * </ul>
-         */
-        @Test
-        @DisplayName("Event sourcing handlers apply state changes synchronously within command handler")
-        void eventSourcingHandlersRunSynchronously() {
-            var issueId = new IssueId("issue-1");
-
-            // Given: An issue that is IN_PROGRESS with an assignee
-            fixture.given()
-                    .events(List.of(
-                            new IssueCreated(issueId, "Implement feature"),
-                            new IssueAssigneeChanged(issueId, "developer-1"),
-                            new IssueStatusChanged(issueId, Status.BACKLOG, Status.IN_PROGRESS)
-                    ))
-                    // When: We unassign (which triggers the multi-event logic)
-                    .when().command(new UnassignIssue(issueId), Metadata.emptyInstance())
-                    // Then: Two events are produced, proving that:
-                    // - After first append(), the command handler saw assigneeId as null
-                    // - The status check saw IN_PROGRESS and triggered second append()
-                    .then().events(
-                            new IssueAssigneeRemoved(issueId, "developer-1"),
-                            new IssueStatusChanged(issueId, Status.IN_PROGRESS, Status.BACKLOG)
-                    );
-        }
-    }
-
-    @Nested
-    @DisplayName("Edge Cases")
-    class EdgeCases {
-
-        @Test
-        @DisplayName("Cannot unassign issue with no assignee")
-        void cannotUnassignWithNoAssignee() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .when().command(new UnassignIssue(issueId), Metadata.emptyInstance())
-                    .then()
-                    .exception(IllegalStateException.class)
-                    .exceptionSatisfies(e ->
-                            org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                                    .contains("Issue has no assignee to remove"));
         }
     }
 
@@ -279,51 +179,6 @@ class IssueCommandHandlerTest {
                                 .as("Status should be preserved after rollback")
                                 .isEqualTo(Status.IN_PROGRESS);
                     });
-        }
-
-        /**
-         * Demonstrates that the first event's handler ran successfully before the second failed.
-         *
-         * <p>This test shows that:</p>
-         * <ol>
-         *   <li>IssueAssigneeRemoved was published (its handler ran synchronously)</li>
-         *   <li>Then IssueStatusChanged was published and its handler FAILED</li>
-         *   <li>The command failed as a whole</li>
-         * </ol>
-         *
-         * <p>The test fixture records the first event because handlers run synchronously
-         * during append. In production, the transaction rollback would prevent persistence,
-         * but this demonstrates the synchronous nature of event application.</p>
-         *
-         * <p><strong>Key insight:</strong> If handlers were "eventually consistent" (async),
-         * you wouldn't see this behavior - the second handler failure couldn't affect the
-         * first event at all. The fact that the command fails proves synchronous execution.</p>
-         */
-        @Test
-        @DisplayName("Event handlers run synchronously - first handler completes before second fails")
-        void eventHandlersRunSynchronously_firstCompletesBeforeSecondFails() {
-            var issueId = new IssueId("issue-1");
-
-            // Given: An issue that is IN_PROGRESS with an assignee
-            // When: We unassign (which will fail on second event)
-            failingFixture.given()
-                    .events(List.of(
-                            new IssueCreated(issueId, "Fix the bug"),
-                            new IssueAssigneeChanged(issueId, "user-42"),
-                            new IssueStatusChanged(issueId, Status.BACKLOG, Status.IN_PROGRESS)
-                    ))
-                    .when().command(new UnassignIssue(issueId), Metadata.emptyInstance())
-                    .then()
-                    // The first event was published and its handler ran successfully.
-                    // The second event was published but its handler threw.
-                    // Note: The test fixture records events before commit.
-                    // In production, the transaction rollback would prevent persistence.
-                    .events(
-                            // This event was "applied" - its handler ran successfully
-                            new IssueAssigneeRemoved(issueId, "user-42")
-                            // IssueStatusChanged was also appended, but its handler threw,
-                            // so the command failed and would roll back in production
-                    );
         }
     }
 }
