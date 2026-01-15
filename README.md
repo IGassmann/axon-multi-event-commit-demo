@@ -90,14 +90,9 @@ src/main/java/com/example/issuetracker/
 
 src/test/java/com/example/issuetracker/
 ├── IssueTestFixture.java             # Test infrastructure
-├── IssueCommandHandlerTest.java      # Comprehensive tests
-│
-│   # Rollback verification infrastructure
+├── IssueCommandHandlerTest.java      # Tests for atomic commits and rollback
 ├── FailingIssue.java                 # Extends Issue, overrides handler to throw
-├── FailingIssueQueryHandler.java     # Query handler to verify entity state
-├── FailingIssueConfiguration.java    # Configuration for rollback tests
-├── GetIssueStateQuery.java           # Query to fetch entity state
-└── IssueStateResponse.java           # Response with entity state
+└── FailingIssueConfiguration.java    # Configuration for rollback tests
 ```
 
 ## Axon Framework 5 Patterns Used
@@ -139,19 +134,6 @@ public record IssueCreated(
     @EventTag String issueId,  // Tag key defaults to field name "issueId"
     String title
 ) {}
-```
-
-### Query Handler with Entity Injection
-
-```java
-@QueryHandler
-public IssueStateResponse handle(GetIssueStateQuery query,
-                                 @InjectEntity(idProperty = "issueId") FailingIssue issue) {
-    return new IssueStateResponse(
-            issue.getAssigneeId(),
-            issue.getStatus()
-    );
-}
 ```
 
 ## Running the Tests

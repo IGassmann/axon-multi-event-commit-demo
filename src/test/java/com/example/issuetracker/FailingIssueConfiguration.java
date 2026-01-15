@@ -1,23 +1,23 @@
 package com.example.issuetracker;
 
+import com.example.issuetracker.write.Issue.Status;
 import org.axonframework.eventsourcing.configuration.EventSourcedEntityModule;
 import org.axonframework.eventsourcing.configuration.EventSourcingConfigurer;
+import org.axonframework.messaging.queryhandling.annotation.QueryHandler;
 import org.axonframework.messaging.queryhandling.configuration.QueryHandlingModule;
+import org.axonframework.modelling.annotation.InjectEntity;
 
 /**
  * Configuration for the FailingIssue entity used in atomic rollback tests.
- *
- * <p>Uses entity-centric command handlers where {@code @CommandHandler} methods
- * are defined directly in the {@link FailingIssue} entity class.</p>
  */
 public class FailingIssueConfiguration {
 
-    /**
-     * Configures the FailingIssue entity and query handler.
-     *
-     * <p>No separate CommandHandlingModule is needed because the FailingIssue entity
-     * contains its own {@code @CommandHandler} methods (entity-centric pattern).</p>
-     */
+    /** Query to fetch entity state for rollback verification. */
+    public record GetIssueStateQuery(String issueId) {}
+
+    /** Response containing entity state for rollback verification. */
+    public record IssueStateResponse(String assigneeId, Status status) {}
+
     public static EventSourcingConfigurer configure(EventSourcingConfigurer configurer) {
         var failingIssueEntity = EventSourcedEntityModule
                 .autodetected(String.class, FailingIssue.class);
@@ -25,7 +25,13 @@ public class FailingIssueConfiguration {
         var queryHandlingModule = QueryHandlingModule
                 .named("FailingIssueQueries")
                 .queryHandlers()
-                .annotatedQueryHandlingComponent(c -> new FailingIssueQueryHandler());
+                .annotatedQueryHandlingComponent(c -> new Object() {
+                    @QueryHandler
+                    public IssueStateResponse handle(GetIssueStateQuery query,
+                                                     @InjectEntity(idProperty = "issueId") FailingIssue issue) {
+                        return new IssueStateResponse(issue.getAssigneeId(), issue.getStatus());
+                    }
+                });
 
         return configurer
                 .registerEntity(failingIssueEntity)

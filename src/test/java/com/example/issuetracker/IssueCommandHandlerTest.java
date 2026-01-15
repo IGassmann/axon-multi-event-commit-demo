@@ -165,8 +165,8 @@ class IssueCommandHandlerTest {
 
                         // Query the entity state
                         var state = queryGateway.query(
-                                new GetIssueStateQuery(issueId),
-                                IssueStateResponse.class
+                                new FailingIssueConfiguration.GetIssueStateQuery(issueId),
+                                FailingIssueConfiguration.IssueStateResponse.class
                         ).join();
 
                         // VERIFY: State should be rolled back to pre-command values
