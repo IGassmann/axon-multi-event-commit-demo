@@ -2,9 +2,6 @@ plugins {
     id 'java'
 }
 
-group = 'com.example'
-version = '0.0.1-SNAPSHOT'
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -19,15 +16,8 @@ dependencies {
     // Axon Framework 5
     implementation platform('org.axonframework:axon-framework-bom:5.0.1')
     implementation 'org.axonframework:axon-eventsourcing'
-    implementation 'org.axonframework:axon-messaging'
-    implementation 'org.axonframework:axon-modelling'
-
-    // Jackson for serialization
-    implementation platform('com.fasterxml.jackson:jackson-bom:2.18.2')
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     // Logging
-    implementation 'org.apache.logging.log4j:log4j-api:2.24.3'
     runtimeOnly 'org.apache.logging.log4j:log4j-core:2.24.3'
     runtimeOnly 'org.apache.logging.log4j:log4j-slf4j2-impl:2.24.3'
 
