@@ -8,7 +8,6 @@ import com.example.issuetracker.shared.Status;
  */
 public record IssueStateResponse(
         String assigneeId,
-        Status status,
-        boolean created
+        Status status
 ) {
 }

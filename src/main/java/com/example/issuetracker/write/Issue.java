@@ -125,24 +125,12 @@ public class Issue {
     // Query Methods
     // ========================================================================
 
-    public IssueId getId() {
-        return id;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
     public Status getStatus() {
         return status;
     }
 
     public String getAssigneeId() {
         return assigneeId;
-    }
-
-    public boolean isCreated() {
-        return created;
     }
 
     private void assertCreated() {

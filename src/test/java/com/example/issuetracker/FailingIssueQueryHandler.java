@@ -16,8 +16,7 @@ public class FailingIssueQueryHandler {
                                      @InjectEntity(idProperty = IssueTags.ISSUE_ID) FailingIssue issue) {
         return new IssueStateResponse(
                 issue.getAssigneeId(),
-                issue.getStatus(),
-                issue.isCreated()
+                issue.getStatus()
         );
     }
 }
