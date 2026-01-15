@@ -1,6 +1,6 @@
 # Axon Framework 5: Atomic Multi-Event Commit Demonstration
 
-This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handles atomic multi-event commits within a single consistency boundary (aggregate). It shows that **all events—and their event sourcing handlers—appended within a single command handler are committed atomically**—.
+This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handles atomic multi-event commits within a single consistency boundary (aggregate). It shows that **all events—and their event sourcing handlers—appended within a single command handler are committed atomically**.
 
 ## Background
 
