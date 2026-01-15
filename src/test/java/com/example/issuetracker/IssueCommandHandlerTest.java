@@ -5,8 +5,7 @@ import com.example.issuetracker.events.IssueAssigneeChanged;
 import com.example.issuetracker.events.IssueAssigneeRemoved;
 import com.example.issuetracker.events.IssueCreated;
 import com.example.issuetracker.events.IssueStatusChanged;
-import com.example.issuetracker.shared.IssueId;
-import com.example.issuetracker.shared.Status;
+import com.example.issuetracker.write.Issue;
 import org.axonframework.messaging.core.Metadata;
 import org.axonframework.test.fixture.AxonTestFixture;
 import org.junit.jupiter.api.AfterEach;
@@ -16,6 +15,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+
+import static com.example.issuetracker.write.Issue.Status;
 
 /**
  * Test cases demonstrating Axon Framework 5's atomic multi-event commit behavior.
@@ -60,7 +61,7 @@ class IssueCommandHandlerTest {
         @Test
         @DisplayName("Unassign from IN_PROGRESS issue emits both IssueAssigneeRemoved and IssueStatusChanged atomically")
         void unassignFromInProgressIssue_emitsTwoEventsAtomically() {
-            var issueId = new IssueId("issue-1");
+            var issueId = "issue-1";
 
             fixture.given()
                     .events(List.of(
@@ -133,7 +134,7 @@ class IssueCommandHandlerTest {
         @Test
         @DisplayName("Command fails when event sourcing handler throws - state is rolled back")
         void commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack() {
-            var issueId = new IssueId("issue-1");
+            var issueId = "issue-1";
 
             // Given: An issue that is IN_PROGRESS with an assignee
             // When: We unassign, triggering both events (second one will fail)

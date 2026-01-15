@@ -5,8 +5,6 @@ import com.example.issuetracker.events.IssueAssigneeChanged;
 import com.example.issuetracker.events.IssueAssigneeRemoved;
 import com.example.issuetracker.events.IssueCreated;
 import com.example.issuetracker.events.IssueStatusChanged;
-import com.example.issuetracker.shared.IssueId;
-import com.example.issuetracker.shared.Status;
 import org.axonframework.eventsourcing.annotation.EventSourcedEntity;
 import org.axonframework.eventsourcing.annotation.EventSourcingHandler;
 import org.axonframework.eventsourcing.annotation.reflection.EntityCreator;
@@ -36,7 +34,14 @@ import org.axonframework.messaging.eventhandling.gateway.EventAppender;
 @EventSourcedEntity(tagKey = "issueId")
 public class Issue {
 
-    private IssueId id;
+    public enum Status {
+        BACKLOG,
+        IN_PROGRESS,
+        REVIEW,
+        DONE
+    }
+
+    private String id;
     private String title;
     private Status status;
     private String assigneeId;

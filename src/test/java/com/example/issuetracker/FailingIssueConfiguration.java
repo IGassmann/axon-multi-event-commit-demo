@@ -1,6 +1,5 @@
 package com.example.issuetracker;
 
-import com.example.issuetracker.shared.IssueId;
 import org.axonframework.eventsourcing.configuration.EventSourcedEntityModule;
 import org.axonframework.eventsourcing.configuration.EventSourcingConfigurer;
 import org.axonframework.messaging.queryhandling.configuration.QueryHandlingModule;
@@ -21,7 +20,7 @@ public class FailingIssueConfiguration {
      */
     public static EventSourcingConfigurer configure(EventSourcingConfigurer configurer) {
         var failingIssueEntity = EventSourcedEntityModule
-                .autodetected(IssueId.class, FailingIssue.class);
+                .autodetected(String.class, FailingIssue.class);
 
         var queryHandlingModule = QueryHandlingModule
                 .named("FailingIssueQueries")

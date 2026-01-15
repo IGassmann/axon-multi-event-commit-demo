@@ -84,9 +84,6 @@ src/main/java/com/example/issuetracker/
 │   ├── IssueAssigneeChanged.java
 │   ├── IssueAssigneeRemoved.java
 │   └── IssueStatusChanged.java
-├── shared/
-│   ├── IssueId.java                  # Strongly-typed ID
-│   └── Status.java
 └── write/
     ├── Issue.java                    # Entity with @CommandHandler + @EventSourcingHandler
     └── IssueConfiguration.java       # Axon 5 configuration
@@ -139,7 +136,7 @@ public class Issue {
 
 ```java
 public record IssueCreated(
-    @EventTag IssueId issueId,  // Tag key defaults to field name "issueId"
+    @EventTag String issueId,  // Tag key defaults to field name "issueId"
     String title
 ) {}
 ```
@@ -216,7 +213,7 @@ This test uses a `FailingIssue` entity (extends `Issue`) that throws an exceptio
 ```java
 @Test
 void commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack() {
-    var issueId = new IssueId("issue-1");
+    var issueId = "issue-1";
 
     failingFixture.given()
             .events(List.of(

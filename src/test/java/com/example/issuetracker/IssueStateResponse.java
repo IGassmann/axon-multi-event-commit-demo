@@ -1,6 +1,6 @@
 package com.example.issuetracker;
 
-import com.example.issuetracker.shared.Status;
+import com.example.issuetracker.write.Issue;
 
 /**
  * Response containing the current state of a FailingIssue entity.
@@ -8,6 +8,6 @@ import com.example.issuetracker.shared.Status;
  */
 public record IssueStateResponse(
         String assigneeId,
-        Status status
+        Issue.Status status
 ) {
 }

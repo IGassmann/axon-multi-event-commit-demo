@@ -1,7 +1,6 @@
 package com.example.issuetracker;
 
 import com.example.issuetracker.events.IssueStatusChanged;
-import com.example.issuetracker.shared.Status;
 import com.example.issuetracker.write.Issue;
 import org.axonframework.eventsourcing.annotation.EventSourcedEntity;
 import org.axonframework.eventsourcing.annotation.EventSourcingHandler;
@@ -44,7 +43,7 @@ public class FailingIssue extends Issue {
     @Override
     @EventSourcingHandler
     protected void on(IssueStatusChanged event) {
-        if (event.oldStatus() == Status.IN_PROGRESS) {
+        if (event.oldStatus() == Issue.Status.IN_PROGRESS) {
             throw new RuntimeException("Simulated failure in IssueStatusChanged handler - testing atomic rollback");
         }
         super.on(event);

@@ -1,6 +1,5 @@
 package com.example.issuetracker.write;
 
-import com.example.issuetracker.shared.IssueId;
 import org.axonframework.eventsourcing.configuration.EventSourcedEntityModule;
 import org.axonframework.eventsourcing.configuration.EventSourcingConfigurer;
 
@@ -20,7 +19,7 @@ public class IssueConfiguration {
      */
     public static EventSourcingConfigurer configure(EventSourcingConfigurer configurer) {
         var issueEntity = EventSourcedEntityModule
-                .autodetected(IssueId.class, Issue.class);
+                .autodetected(String.class, Issue.class);
 
         return configurer.registerEntity(issueEntity);
     }
