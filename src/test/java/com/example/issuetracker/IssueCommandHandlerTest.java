@@ -1,8 +1,5 @@
 package com.example.issuetracker;
 
-import com.example.issuetracker.commands.AssignIssue;
-import com.example.issuetracker.commands.ChangeIssueStatus;
-import com.example.issuetracker.commands.CreateIssue;
 import com.example.issuetracker.commands.UnassignIssue;
 import com.example.issuetracker.events.IssueAssigneeChanged;
 import com.example.issuetracker.events.IssueAssigneeRemoved;
@@ -45,55 +42,6 @@ class IssueCommandHandlerTest {
     @AfterEach
     void tearDown() {
         fixture.stop();
-    }
-
-    @Nested
-    @DisplayName("Basic Operations")
-    class BasicOperations {
-
-        @Test
-        @DisplayName("Create issue - starts in BACKLOG with no assignee")
-        void createIssue() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given()
-                    .when().command(new CreateIssue(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .then().events(new IssueCreated(issueId, "Fix the bug"));
-        }
-
-        @Test
-        @DisplayName("Create issue is idempotent")
-        void createIssueIdempotent() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .when().command(new CreateIssue(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .then().events();  // No events expected
-        }
-
-        @Test
-        @DisplayName("Assign issue to user")
-        void assignIssue() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .when().command(new AssignIssue(issueId, "user-42"), Metadata.emptyInstance())
-                    .then().events(new IssueAssigneeChanged(issueId, "user-42"));
-        }
-
-        @Test
-        @DisplayName("Change status to IN_PROGRESS when assignee exists")
-        void changeStatusToInProgress() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given()
-                    .events(List.of(
-                            new IssueCreated(issueId, "Fix the bug"),
-                            new IssueAssigneeChanged(issueId, "user-42")
-                    ))
-                    .when().command(new ChangeIssueStatus(issueId, Status.IN_PROGRESS), Metadata.emptyInstance())
-                    .then().events(new IssueStatusChanged(issueId, Status.BACKLOG, Status.IN_PROGRESS));
-        }
     }
 
     @Nested
@@ -211,70 +159,6 @@ class IssueCommandHandlerTest {
     }
 
     @Nested
-    @DisplayName("Invariant Enforcement")
-    class InvariantEnforcement {
-
-        /**
-         * INVALID STATE REJECTION: This test demonstrates that the invariant
-         * (IN_PROGRESS requires assignee) is enforced.
-         *
-         * <p>We simulate a scenario where someone tries to change status to IN_PROGRESS
-         * without having an assignee. This should fail immediately.</p>
-         */
-        @Test
-        @DisplayName("Cannot change to IN_PROGRESS without assignee")
-        void cannotChangeToInProgressWithoutAssignee() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .when().command(new ChangeIssueStatus(issueId, Status.IN_PROGRESS), Metadata.emptyInstance())
-                    .then()
-                    .exception(IllegalStateException.class)
-                    .exceptionSatisfies(e ->
-                            org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                                    .contains("Cannot change status to IN_PROGRESS"));
-        }
-
-        /**
-         * This test verifies that changing to IN_PROGRESS validates assignee presence.
-         */
-        @Test
-        @DisplayName("Invariant is enforced when status becomes IN_PROGRESS with null assignee")
-        void invariantEnforcedOnStatusChange() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given()
-                    .events(List.of(
-                            new IssueCreated(issueId, "Fix the bug"),
-                            new IssueAssigneeChanged(issueId, "user-42"),
-                            new IssueAssigneeRemoved(issueId, "user-42")
-                    ))
-                    .when().command(new ChangeIssueStatus(issueId, Status.IN_PROGRESS), Metadata.emptyInstance())
-                    .then()
-                    .exception(IllegalStateException.class);
-        }
-
-        /**
-         * This test shows that assigning an issue that's already IN_PROGRESS works fine
-         * (re-assigning to a different user).
-         */
-        @Test
-        @DisplayName("Can reassign IN_PROGRESS issue to different user")
-        void canReassignInProgressIssue() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given()
-                    .events(List.of(
-                            new IssueCreated(issueId, "Fix the bug"),
-                            new IssueAssigneeChanged(issueId, "user-42"),
-                            new IssueStatusChanged(issueId, Status.BACKLOG, Status.IN_PROGRESS)
-                    ))
-                    .when().command(new AssignIssue(issueId, "user-99"), Metadata.emptyInstance())
-                    .then().events(new IssueAssigneeChanged(issueId, "user-99"));
-        }
-    }
-
-    @Nested
     @DisplayName("Edge Cases")
     class EdgeCases {
 
@@ -290,27 +174,6 @@ class IssueCommandHandlerTest {
                     .exceptionSatisfies(e ->
                             org.assertj.core.api.Assertions.assertThat(e.getMessage())
                                     .contains("Issue has no assignee to remove"));
-        }
-
-        @Test
-        @DisplayName("Cannot assign blank assignee ID")
-        void cannotAssignBlankAssigneeId() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .when().command(new AssignIssue(issueId, ""), Metadata.emptyInstance())
-                    .then()
-                    .exception(IllegalArgumentException.class);
-        }
-
-        @Test
-        @DisplayName("Changing to same status is a no-op")
-        void changingToSameStatusIsNoOp() {
-            var issueId = new IssueId("issue-1");
-
-            fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-                    .when().command(new ChangeIssueStatus(issueId, Status.BACKLOG), Metadata.emptyInstance())
-                    .then().events();  // No events expected
         }
     }
 

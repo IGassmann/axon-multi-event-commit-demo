@@ -1,10 +1,10 @@
 # Axon Framework 5: Atomic Multi-Event Commit Demonstration
 
-This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handles atomic multi-event commits within a single aggregate. It shows that **event sourcing handlers are NOT eventually consistent**—they run synchronously when `EventAppender.append()` is called, and all events from a single command are committed atomically.
+This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handles atomic multi-event commits within a single aggregate. It proves that **all events appended within a single command handler are committed atomically**—either all events are persisted together, or none are (on failure, all state changes are rolled back).
 
 ## Background
 
-This demonstration supports the argument made in [livestorejs/livestore#503](https://github.com/livestorejs/livestore/issues/503) that materializers (equivalent to Axon's event sourcing handlers) must process events synchronously within the same transaction to maintain aggregate invariants.
+This demonstration supports the argument made in [livestorejs/livestore#503](https://github.com/livestorejs/livestore/issues/503) that materializers (equivalent to Axon's event sourcing handlers) must commit events atomically within the same transaction to maintain aggregate invariants.
 
 ## Business Domain: Issue Tracker
 
@@ -25,14 +25,14 @@ Both state changes must happen together. If only the first change is applied, th
 
 ## How Axon Framework 5 Handles This
 
-### Synchronous Event Application
+### Atomic Event Commits
 
 When `EventAppender.append()` is called in a command handler:
 
-1. The event is **immediately** passed to the entity's `@EventSourcingHandler`
-2. The handler updates the entity's state **synchronously** (same thread, same call stack)
-3. The event is staged for persistence but NOT yet committed
-4. After the command handler completes, ALL staged events are committed **atomically**
+1. The event is passed to the entity's `@EventSourcingHandler` to update state
+2. The event is staged for persistence but NOT yet committed
+3. After the command handler completes, ALL staged events are committed **atomically**
+4. If any handler fails, the entire unit of work is rolled back—no events are persisted
 
 ```java
 @EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
@@ -44,13 +44,10 @@ public class Issue {
         String previousAssigneeId = this.assigneeId;
         Status currentStatus = this.status;
 
-        // Apply first event - @EventSourcingHandler runs IMMEDIATELY
+        // First event
         appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
 
-        // At this point, this.assigneeId is ALREADY null!
-        // The @EventSourcingHandler ran synchronously.
-
-        // Check if we need to change status to maintain invariant
+        // Second event (if needed to maintain invariant)
         if (currentStatus == Status.IN_PROGRESS) {
             appender.append(new IssueStatusChanged(command.issueId(), Status.IN_PROGRESS, Status.BACKLOG));
         }
@@ -72,21 +69,16 @@ public class Issue {
 
 ### Key Points
 
-1. **Not Eventually Consistent**: Event sourcing handlers run in the same thread, same call stack as `append()`. You can immediately read the updated state.
+1. **Atomic Commits**: All events appended within a single command handler are committed together. If the transaction fails, no events are persisted and state is rolled back.
 
-2. **Atomic Commits**: All events appended within a single command handler are committed together. If the transaction fails, no events are persisted.
-
-3. **Invariant Enforcement**: Because handlers run synchronously, you can apply multiple events to transition through intermediate states and end in a valid final state.
+2. **Invariant Enforcement**: Multiple events can be applied to transition through intermediate states and end in a valid final state—all committed as one atomic unit.
 
 ## Project Structure
 
 ```
 src/main/java/com/example/issuetracker/
 ├── commands/
-│   ├── CreateIssue.java
-│   ├── AssignIssue.java
-│   ├── UnassignIssue.java            # Triggers multi-event scenario
-│   └── ChangeIssueStatus.java
+│   └── UnassignIssue.java            # Triggers multi-event scenario
 ├── events/
 │   ├── IssueCreated.java             # Uses @EventTag for consistency boundary
 │   ├── IssueAssigneeChanged.java
@@ -105,7 +97,7 @@ src/test/java/com/example/issuetracker/
 ├── IssueCommandHandlerTest.java      # Comprehensive tests
 │
 │   # Rollback verification infrastructure
-├── FailingIssue.java                 # Test entity that throws in handler
+├── FailingIssue.java                 # Extends Issue, overrides handler to throw
 ├── FailingIssueQueryHandler.java     # Query handler to verify entity state
 ├── FailingIssueConfiguration.java    # Configuration for rollback tests
 ├── GetIssueStateQuery.java           # Query to fetch entity state
@@ -127,18 +119,19 @@ public class Issue {
 
     // Command handler in the entity itself
     @CommandHandler
-    public void handle(CreateIssue command, EventAppender appender) {
-        if (created) return;
-        appender.append(new IssueCreated(command.issueId(), command.title()));
+    public void handle(UnassignIssue command, EventAppender appender) {
+        // First event
+        appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
+        // Second event (if needed)
+        if (currentStatus == Status.IN_PROGRESS) {
+            appender.append(new IssueStatusChanged(...));
+        }
     }
 
-    // Event sourcing handler applies state changes
+    // Event sourcing handlers apply state changes
     @EventSourcingHandler
-    public void on(IssueCreated event) {
-        this.id = event.issueId();
-        this.title = event.title();
-        this.status = Status.BACKLOG;
-        this.created = true;
+    public void on(IssueAssigneeRemoved event) {
+        this.assigneeId = null;
     }
 }
 ```
@@ -195,9 +188,7 @@ sdk install java 21-tem
 All tests should pass, demonstrating:
 
 1. **Atomic Multi-Event Commits**: `unassignFromInProgressIssue_emitsTwoEventsAtomically` proves both events are emitted from a single command
-2. **Synchronous Event Application**: `eventSourcingHandlersRunSynchronously` proves state is updated immediately after `append()`
-3. **Invariant Enforcement**: `cannotChangeToInProgressWithoutAssignee` proves the invariant is validated
-4. **Atomic Rollback with State Verification**: `commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack` proves that when an event sourcing handler fails, the entity state is rolled back (verified via point-to-point query)
+2. **Atomic Rollback**: `commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack` proves that when an event sourcing handler fails, all state changes are rolled back (verified via point-to-point query)
 
 ## Test Cases Explained
 
@@ -221,25 +212,9 @@ void unassignFromInProgressIssue_emitsTwoEventsAtomically() {
 }
 ```
 
-### 2. Synchronous State Updates
+### 2. Atomic Rollback Demonstration
 
-The `UnassignIssue` handler demonstrates that after calling `appender.append(IssueAssigneeRemoved)`, the handler can immediately check the current status and decide whether to append a second event. This only works because the state is updated synchronously.
-
-### 3. Invariant Validation
-
-```java
-@Test
-void cannotChangeToInProgressWithoutAssignee() {
-    fixture.given().event(new IssueCreated(issueId, "Fix the bug"), Metadata.emptyInstance())
-            .when().command(new ChangeIssueStatus(issueId, Status.IN_PROGRESS), Metadata.emptyInstance())
-            .then()
-            .exception(IllegalStateException.class);
-}
-```
-
-### 4. Atomic Rollback Demonstration
-
-This test uses a special `FailingIssue` entity that throws an exception in its `IssueStatusChanged` handler to demonstrate atomic rollback:
+This test uses a `FailingIssue` entity (extends `Issue`) that throws an exception in its `IssueStatusChanged` handler to demonstrate atomic rollback:
 
 ```java
 @Test
@@ -271,20 +246,20 @@ void commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack() {
 ```
 
 This proves that:
-1. Event sourcing handlers run **synchronously** within the same unit of work
+1. All events from a single command are part of the **same unit of work**
 2. If ANY handler fails, the **entire command fails**
 3. The **entity state is rolled back** - verified by querying after the failure
-4. No events are persisted to the event store
+4. **No events are persisted** to the event store
 
 ## Implications for LiveStore
 
 This demonstration proves that in a mature, production-tested event sourcing framework:
 
-- **Materializers (event sourcing handlers) are NOT eventually consistent**
-- **They run synchronously within the same unit of work**
+- **All events from a single command are committed atomically**
+- **If any handler fails, all state changes are rolled back**
 - **This is required to maintain aggregate invariants**
 
-The same pattern applies to LiveStore: materializers must process events synchronously to allow aggregates to maintain their invariants during multi-event state transitions.
+The same pattern applies to LiveStore: materializers must commit events atomically to allow aggregates to maintain their invariants during multi-event state transitions.
 
 ## Technology Stack
 
