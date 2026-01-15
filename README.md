@@ -35,7 +35,7 @@ When `EventAppender.append()` is called in a command handler:
 4. If any handler fails, the entire unit of work is rolled back—no events are persisted
 
 ```java
-@EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
+@EventSourcedEntity(tagKey = "issueId")
 public class Issue {
 
     @CommandHandler
@@ -86,7 +86,6 @@ src/main/java/com/example/issuetracker/
 │   └── IssueStatusChanged.java
 ├── shared/
 │   ├── IssueId.java                  # Strongly-typed ID
-│   ├── IssueTags.java                # Tag key constants
 │   └── Status.java
 └── write/
     ├── Issue.java                    # Entity with @CommandHandler + @EventSourcingHandler
@@ -111,7 +110,7 @@ src/test/java/com/example/issuetracker/
 Command handlers are defined directly in the entity class alongside event sourcing handlers:
 
 ```java
-@EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
+@EventSourcedEntity(tagKey = "issueId")
 public class Issue {
 
     @EntityCreator
@@ -140,8 +139,7 @@ public class Issue {
 
 ```java
 public record IssueCreated(
-    @EventTag(key = IssueTags.ISSUE_ID)
-    IssueId issueId,
+    @EventTag IssueId issueId,  // Tag key defaults to field name "issueId"
     String title
 ) {}
 ```
@@ -151,11 +149,10 @@ public record IssueCreated(
 ```java
 @QueryHandler
 public IssueStateResponse handle(GetIssueStateQuery query,
-                                 @InjectEntity(idProperty = IssueTags.ISSUE_ID) FailingIssue issue) {
+                                 @InjectEntity(idProperty = "issueId") FailingIssue issue) {
     return new IssueStateResponse(
             issue.getAssigneeId(),
-            issue.getStatus(),
-            issue.isCreated()
+            issue.getStatus()
     );
 }
 ```

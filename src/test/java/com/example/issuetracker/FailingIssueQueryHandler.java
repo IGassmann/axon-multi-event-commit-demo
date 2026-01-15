@@ -1,7 +1,5 @@
 package com.example.issuetracker;
 
-import com.example.issuetracker.shared.IssueId;
-import com.example.issuetracker.shared.IssueTags;
 import org.axonframework.messaging.queryhandling.annotation.QueryHandler;
 import org.axonframework.modelling.annotation.InjectEntity;
 
@@ -13,7 +11,7 @@ public class FailingIssueQueryHandler {
 
     @QueryHandler
     public IssueStateResponse handle(GetIssueStateQuery query,
-                                     @InjectEntity(idProperty = IssueTags.ISSUE_ID) FailingIssue issue) {
+                                     @InjectEntity(idProperty = "issueId") FailingIssue issue) {
         return new IssueStateResponse(
                 issue.getAssigneeId(),
                 issue.getStatus()

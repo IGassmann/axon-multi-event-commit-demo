@@ -6,7 +6,6 @@ import com.example.issuetracker.events.IssueAssigneeRemoved;
 import com.example.issuetracker.events.IssueCreated;
 import com.example.issuetracker.events.IssueStatusChanged;
 import com.example.issuetracker.shared.IssueId;
-import com.example.issuetracker.shared.IssueTags;
 import com.example.issuetracker.shared.Status;
 import org.axonframework.eventsourcing.annotation.EventSourcedEntity;
 import org.axonframework.eventsourcing.annotation.EventSourcingHandler;
@@ -34,7 +33,7 @@ import org.axonframework.messaging.eventhandling.gateway.EventAppender;
  * All events are committed together when the handler completes, or all are
  * rolled back if any handler fails.
  */
-@EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
+@EventSourcedEntity(tagKey = "issueId")
 public class Issue {
 
     private IssueId id;

@@ -1,7 +1,6 @@
 package com.example.issuetracker;
 
 import com.example.issuetracker.events.IssueStatusChanged;
-import com.example.issuetracker.shared.IssueTags;
 import com.example.issuetracker.shared.Status;
 import com.example.issuetracker.write.Issue;
 import org.axonframework.eventsourcing.annotation.EventSourcedEntity;
@@ -23,7 +22,7 @@ import org.axonframework.eventsourcing.annotation.reflection.EntityCreator;
  * <p>This proves that all events from a single command are committed atomically,
  * and a failure in any handler causes all events and state changes to be rolled back.</p>
  */
-@EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
+@EventSourcedEntity(tagKey = "issueId")
 public class FailingIssue extends Issue {
 
     @EntityCreator
