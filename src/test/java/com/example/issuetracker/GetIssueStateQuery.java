@@ -1,0 +1,10 @@
+package com.example.issuetracker;
+
+import com.example.issuetracker.shared.IssueId;
+
+/**
+ * Query to fetch the current state of a FailingIssue entity.
+ * Used in tests to verify rollback behavior.
+ */
+public record GetIssueStateQuery(IssueId issueId) {
+}
