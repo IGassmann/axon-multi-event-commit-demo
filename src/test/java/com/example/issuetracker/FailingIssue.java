@@ -1,5 +1,8 @@
 package com.example.issuetracker;
 
+import com.example.issuetracker.commands.AssignIssue;
+import com.example.issuetracker.commands.CreateIssue;
+import com.example.issuetracker.commands.UnassignIssue;
 import com.example.issuetracker.events.IssueAssigneeChanged;
 import com.example.issuetracker.events.IssueAssigneeRemoved;
 import com.example.issuetracker.events.IssueCreated;
@@ -10,13 +13,16 @@ import com.example.issuetracker.shared.Status;
 import org.axonframework.eventsourcing.annotation.EventSourcedEntity;
 import org.axonframework.eventsourcing.annotation.EventSourcingHandler;
 import org.axonframework.eventsourcing.annotation.reflection.EntityCreator;
+import org.axonframework.messaging.commandhandling.annotation.CommandHandler;
+import org.axonframework.messaging.eventhandling.gateway.EventAppender;
 
 /**
  * A test-only Issue entity that throws an exception in the IssueStatusChanged handler.
  *
- * <p>This entity is used to demonstrate that Axon Framework commits events atomically.
- * When the IssueStatusChanged handler fails, the entire unit of work is rolled back,
- * meaning the IssueAssigneeRemoved event is also NOT persisted.</p>
+ * <p>This entity uses entity-centric command handlers and is used to demonstrate
+ * that Axon Framework commits events atomically. When the IssueStatusChanged handler
+ * fails, the entire unit of work is rolled back, meaning the IssueAssigneeRemoved
+ * event is also NOT persisted.</p>
  *
  * <p>This proves that event sourcing handlers run within the same transaction boundary,
  * and a failure in any handler causes all events to be rolled back.</p>
@@ -34,6 +40,62 @@ public class FailingIssue {
     public FailingIssue() {
         this.created = false;
     }
+
+    // ========================================================================
+    // Command Handlers
+    // ========================================================================
+
+    @CommandHandler
+    public void handle(CreateIssue command, EventAppender appender) {
+        if (created) {
+            return;
+        }
+        appender.append(new IssueCreated(command.issueId(), command.title()));
+    }
+
+    @CommandHandler
+    public void handle(AssignIssue command, EventAppender appender) {
+        assertCreated();
+        if (command.assigneeId() == null || command.assigneeId().isBlank()) {
+            throw new IllegalArgumentException("Assignee ID cannot be null or blank");
+        }
+        appender.append(new IssueAssigneeChanged(command.issueId(), command.assigneeId()));
+    }
+
+    /**
+     * Unassigns an issue - this will trigger the failing handler.
+     *
+     * <p>When the issue is IN_PROGRESS, this handler appends TWO events:
+     * <ol>
+     *   <li>IssueAssigneeRemoved - its handler runs successfully</li>
+     *   <li>IssueStatusChanged - its handler THROWS</li>
+     * </ol>
+     *
+     * <p>Because the second handler fails, the entire unit of work is rolled back,
+     * and NEITHER event is persisted. This demonstrates atomic commit behavior.</p>
+     */
+    @CommandHandler
+    public void handle(UnassignIssue command, EventAppender appender) {
+        assertCreated();
+        if (assigneeId == null) {
+            throw new IllegalStateException("Issue has no assignee to remove");
+        }
+
+        String previousAssigneeId = assigneeId;
+        Status currentStatus = status;
+
+        // First event - handler runs successfully and sets assigneeId to null
+        appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
+
+        // Second event - handler THROWS, causing rollback
+        if (currentStatus == Status.IN_PROGRESS) {
+            appender.append(new IssueStatusChanged(command.issueId(), Status.IN_PROGRESS, Status.BACKLOG));
+        }
+    }
+
+    // ========================================================================
+    // Event Sourcing Handlers
+    // ========================================================================
 
     @EventSourcingHandler
     public void on(IssueCreated event) {
@@ -75,6 +137,10 @@ public class FailingIssue {
         }
         this.status = event.newStatus();
     }
+
+    // ========================================================================
+    // Query Methods
+    // ========================================================================
 
     public IssueId getId() {
         return id;

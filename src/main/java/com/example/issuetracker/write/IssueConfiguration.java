@@ -3,28 +3,26 @@ package com.example.issuetracker.write;
 import com.example.issuetracker.shared.IssueId;
 import org.axonframework.eventsourcing.configuration.EventSourcedEntityModule;
 import org.axonframework.eventsourcing.configuration.EventSourcingConfigurer;
-import org.axonframework.messaging.commandhandling.configuration.CommandHandlingModule;
 
 /**
- * Configuration for Issue command handling in Axon Framework 5.
+ * Configuration for Issue entity in Axon Framework 5.
+ *
+ * <p>Uses entity-centric command handlers where {@code @CommandHandler} methods
+ * are defined directly in the {@link Issue} entity class.</p>
  */
 public class IssueConfiguration {
 
     /**
-     * Configures the Issue entity and command handler with the EventSourcingConfigurer.
+     * Configures the Issue entity with the EventSourcingConfigurer.
+     *
+     * <p>No separate CommandHandlingModule is needed because the Issue entity
+     * contains its own {@code @CommandHandler} methods (entity-centric pattern).</p>
      */
     public static EventSourcingConfigurer configure(EventSourcingConfigurer configurer) {
         var issueEntity = EventSourcedEntityModule
                 .autodetected(IssueId.class, Issue.class);
 
-        var commandHandlingModule = CommandHandlingModule
-                .named("IssueCommands")
-                .commandHandlers()
-                .annotatedCommandHandlingComponent(c -> new IssueCommandHandler());
-
-        return configurer
-                .registerEntity(issueEntity)
-                .registerCommandHandlingModule(commandHandlingModule);
+        return configurer.registerEntity(issueEntity);
     }
 
     private IssueConfiguration() {

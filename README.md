@@ -35,26 +35,38 @@ When `EventAppender.append()` is called in a command handler:
 4. After the command handler completes, ALL staged events are committed **atomically**
 
 ```java
-@CommandHandler
-public void handle(UnassignIssue command,
-                   @InjectEntity(idProperty = IssueTags.ISSUE_ID) Issue issue,
-                   EventAppender appender) {
-    // Capture current state
-    String previousAssigneeId = issue.getAssigneeId();
-    Status currentStatus = issue.getStatus();
+@EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
+public class Issue {
 
-    // Apply first event - @EventSourcingHandler runs IMMEDIATELY
-    appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
+    @CommandHandler
+    public void handle(UnassignIssue command, EventAppender appender) {
+        // Capture current state
+        String previousAssigneeId = this.assigneeId;
+        Status currentStatus = this.status;
 
-    // At this point, issue.getAssigneeId() is ALREADY null!
-    // The @EventSourcingHandler ran synchronously.
+        // Apply first event - @EventSourcingHandler runs IMMEDIATELY
+        appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
 
-    // Check if we need to change status to maintain invariant
-    if (currentStatus == Status.IN_PROGRESS) {
-        appender.append(new IssueStatusChanged(command.issueId(), Status.IN_PROGRESS, Status.BACKLOG));
+        // At this point, this.assigneeId is ALREADY null!
+        // The @EventSourcingHandler ran synchronously.
+
+        // Check if we need to change status to maintain invariant
+        if (currentStatus == Status.IN_PROGRESS) {
+            appender.append(new IssueStatusChanged(command.issueId(), Status.IN_PROGRESS, Status.BACKLOG));
+        }
+
+        // Both events committed atomically when this method returns
     }
 
-    // Both events committed atomically when this method returns
+    @EventSourcingHandler
+    public void on(IssueAssigneeRemoved event) {
+        this.assigneeId = null;
+    }
+
+    @EventSourcingHandler
+    public void on(IssueStatusChanged event) {
+        this.status = event.newStatus();
+    }
 }
 ```
 
@@ -85,8 +97,7 @@ src/main/java/com/example/issuetracker/
 │   ├── IssueTags.java                # Tag key constants
 │   └── Status.java
 └── write/
-    ├── Issue.java                    # @EventSourcedEntity with handlers
-    ├── IssueCommandHandler.java      # Command handlers using EventAppender
+    ├── Issue.java                    # Entity with @CommandHandler + @EventSourcingHandler
     └── IssueConfiguration.java       # Axon 5 configuration
 
 src/test/java/com/example/issuetracker/
@@ -95,7 +106,6 @@ src/test/java/com/example/issuetracker/
 │
 │   # Rollback verification infrastructure
 ├── FailingIssue.java                 # Test entity that throws in handler
-├── FailingIssueCommandHandler.java   # Command handler for FailingIssue
 ├── FailingIssueQueryHandler.java     # Query handler to verify entity state
 ├── FailingIssueConfiguration.java    # Configuration for rollback tests
 ├── GetIssueStateQuery.java           # Query to fetch entity state
@@ -104,27 +114,32 @@ src/test/java/com/example/issuetracker/
 
 ## Axon Framework 5 Patterns Used
 
-### Event-Sourced Entity
+### Entity-Centric Command Handlers
+
+Command handlers are defined directly in the entity class alongside event sourcing handlers:
 
 ```java
 @EventSourcedEntity(tagKey = IssueTags.ISSUE_ID)
 public class Issue {
+
     @EntityCreator
     public Issue() { ... }
 
+    // Command handler in the entity itself
+    @CommandHandler
+    public void handle(CreateIssue command, EventAppender appender) {
+        if (created) return;
+        appender.append(new IssueCreated(command.issueId(), command.title()));
+    }
+
+    // Event sourcing handler applies state changes
     @EventSourcingHandler
-    public void on(IssueCreated event) { ... }
-}
-```
-
-### Command Handler with Entity Injection
-
-```java
-@CommandHandler
-public void handle(CreateIssue command,
-                   @InjectEntity(idProperty = IssueTags.ISSUE_ID) Issue issue,
-                   EventAppender appender) {
-    appender.append(new IssueCreated(command.issueId(), command.title()));
+    public void on(IssueCreated event) {
+        this.id = event.issueId();
+        this.title = event.title();
+        this.status = Status.BACKLOG;
+        this.created = true;
+    }
 }
 ```
 
