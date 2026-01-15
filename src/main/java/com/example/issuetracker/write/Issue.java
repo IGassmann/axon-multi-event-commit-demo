@@ -10,6 +10,8 @@ import org.axonframework.eventsourcing.annotation.EventSourcingHandler;
 import org.axonframework.eventsourcing.annotation.reflection.EntityCreator;
 import org.axonframework.messaging.commandhandling.annotation.CommandHandler;
 import org.axonframework.messaging.eventhandling.gateway.EventAppender;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Event-sourced entity representing an Issue with entity-centric command handlers.
@@ -33,6 +35,8 @@ import org.axonframework.messaging.eventhandling.gateway.EventAppender;
  */
 @EventSourcedEntity(tagKey = "issueId")
 public class Issue {
+
+    private static final Logger log = LoggerFactory.getLogger(Issue.class);
 
     public enum Status {
         BACKLOG,
@@ -86,15 +90,16 @@ public class Issue {
         Status currentStatus = status;
 
         // First event - removes the assignee
+        log.info("[APPEND] IssueAssigneeRemoved");
         appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
 
         // Second event - if IN_PROGRESS, change status to maintain invariant
         if (currentStatus == Status.IN_PROGRESS) {
+            log.info("[APPEND] IssueStatusChanged");
             appender.append(new IssueStatusChanged(command.issueId(), Status.IN_PROGRESS, Status.BACKLOG));
         }
 
-        // When this method returns, Axon commits ALL appended events atomically.
-        // If any handler fails, all events and state changes are rolled back.
+        log.info("[COMMIT] All events committed atomically");
     }
 
     // ========================================================================
@@ -117,11 +122,13 @@ public class Issue {
 
     @EventSourcingHandler
     public void on(IssueAssigneeRemoved event) {
+        log.info("[APPLY] IssueAssigneeRemoved → assigneeId = null");
         this.assigneeId = null;
     }
 
     @EventSourcingHandler
     protected void on(IssueStatusChanged event) {
+        log.info("[APPLY] IssueStatusChanged → status = {}", event.newStatus());
         this.status = event.newStatus();
     }
 
