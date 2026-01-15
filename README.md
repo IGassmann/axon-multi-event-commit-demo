@@ -1,6 +1,6 @@
 # Axon Framework 5: Atomic Multi-Event Commit Demonstration
 
-This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handles atomic multi-event commits within a single aggregate. It proves that **all events appended within a single command handler are committed atomically**—either all events are persisted together, or none are (on failure, all state changes are rolled back).
+This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handles atomic multi-event commits within a single consistency boundary (aggregate). It shows that **all events—and their event sourcing handlers—appended within a single command handler are committed atomically**—.
 
 ## Background
 
@@ -27,12 +27,14 @@ Both state changes must happen together. If only the first change is applied, th
 
 ### Atomic Event Commits
 
+Axon's `ProcessingContext` manages the message processing lifecycle through distinct phases (pre-invocation, invocation, commit, etc.) and ensures atomic processing—**processing either completes successfully or is rolled back entirely**.
+
 When `EventAppender.append()` is called in a command handler:
 
 1. The event is passed to the entity's `@EventSourcingHandler` to update state
 2. The event is staged for persistence but NOT yet committed
-3. After the command handler completes, ALL staged events are committed **atomically**
-4. If any handler fails, the entire unit of work is rolled back—no events are persisted
+3. After the command handler completes, the `ProcessingContext` moves to the commit phase where ALL staged events are committed **atomically**
+4. If any handler fails, the entire processing context is rolled back—no events are persisted and no state changes are applied.
 
 ```java
 @EventSourcedEntity(tagKey = "issueId")
