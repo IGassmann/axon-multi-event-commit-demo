@@ -67,91 +67,12 @@ public class Issue {
 }
 ```
 
-### Key Points
-
-1. **Atomic Commits**: All events appended within a single command handler are committed together. If the transaction fails, no events are persisted and state is rolled back.
-
-2. **Invariant Enforcement**: Multiple events can be applied to transition through intermediate states and end in a valid final state—all committed as one atomic unit.
-
-## Project Structure
-
-```
-src/main/java/com/example/issuetracker/
-├── commands/
-│   └── UnassignIssue.java            # Triggers multi-event scenario
-├── events/
-│   ├── IssueCreated.java             # Uses @EventTag for consistency boundary
-│   ├── IssueAssigneeChanged.java
-│   ├── IssueAssigneeRemoved.java
-│   └── IssueStatusChanged.java
-└── write/
-    ├── Issue.java                    # Entity with @CommandHandler + @EventSourcingHandler
-    └── IssueConfiguration.java       # Axon 5 configuration
-
-src/test/java/com/example/issuetracker/
-├── IssueTestFixture.java             # Test infrastructure
-├── IssueCommandHandlerTest.java      # Tests for atomic commits and rollback
-├── FailingIssue.java                 # Extends Issue, overrides handler to throw
-└── FailingIssueConfiguration.java    # Configuration for rollback tests
-```
-
-## Axon Framework 5 Patterns Used
-
-### Entity-Centric Command Handlers
-
-Command handlers are defined directly in the entity class alongside event sourcing handlers:
-
-```java
-@EventSourcedEntity(tagKey = "issueId")
-public class Issue {
-
-    @EntityCreator
-    public Issue() { ... }
-
-    // Command handler in the entity itself
-    @CommandHandler
-    public void handle(UnassignIssue command, EventAppender appender) {
-        // First event
-        appender.append(new IssueAssigneeRemoved(command.issueId(), previousAssigneeId));
-        // Second event (if needed)
-        if (currentStatus == Status.IN_PROGRESS) {
-            appender.append(new IssueStatusChanged(...));
-        }
-    }
-
-    // Event sourcing handlers apply state changes
-    @EventSourcingHandler
-    public void on(IssueAssigneeRemoved event) {
-        this.assigneeId = null;
-    }
-}
-```
-
-### Event Tagging for Consistency Boundaries
-
-```java
-public record IssueCreated(
-    @EventTag String issueId,  // Tag key defaults to field name "issueId"
-    String title
-) {}
-```
-
 ## Running the Tests
 
 ### Prerequisites
 
 - Java 21 or later
 - No other dependencies required (uses in-memory event store)
-
-### Install Java 21 (macOS)
-
-```bash
-# Using Homebrew
-brew install openjdk@21
-
-# Or using SDKMAN
-sdk install java 21-tem
-```
 
 ### Run Tests
 
@@ -165,84 +86,6 @@ All tests should pass, demonstrating:
 
 1. **Atomic Multi-Event Commits**: `unassignFromInProgressIssue_emitsTwoEventsAtomically` proves both events are emitted from a single command
 2. **Atomic Rollback**: `commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack` proves that when an event sourcing handler fails, all state changes are rolled back (verified via point-to-point query)
-
-## Test Cases Explained
-
-### 1. Atomic Multi-Event Commit
-
-```java
-@Test
-void unassignFromInProgressIssue_emitsTwoEventsAtomically() {
-    fixture.given()
-            .events(List.of(
-                new IssueCreated(issueId, "Fix the bug"),
-                new IssueAssigneeChanged(issueId, "user-42"),
-                new IssueStatusChanged(issueId, Status.BACKLOG, Status.IN_PROGRESS)
-            ))
-            .when().command(new UnassignIssue(issueId), Metadata.emptyInstance())
-            .then().events(
-                // BOTH events emitted from SAME command handler
-                new IssueAssigneeRemoved(issueId, "user-42"),
-                new IssueStatusChanged(issueId, Status.IN_PROGRESS, Status.BACKLOG)
-            );
-}
-```
-
-### 2. Atomic Rollback Demonstration
-
-This test uses a `FailingIssue` entity (extends `Issue`) that throws an exception in its `IssueStatusChanged` handler to demonstrate atomic rollback:
-
-```java
-@Test
-void commandFailsWhenEventSourcingHandlerThrows_stateIsRolledBack() {
-    var issueId = "issue-1";
-
-    failingFixture.given()
-            .events(List.of(
-                new IssueCreated(issueId, "Fix the bug"),
-                new IssueAssigneeChanged(issueId, "user-42"),
-                new IssueStatusChanged(issueId, Status.BACKLOG, Status.IN_PROGRESS)
-            ))
-            .when().command(new UnassignIssue(issueId), Metadata.emptyInstance())
-            .then()
-            .exception(StateEvolvingException.class)
-            // VERIFY ROLLBACK: Query the entity state after the failed command
-            .expect(config -> {
-                var queryGateway = config.getComponent(QueryGateway.class);
-                var state = queryGateway.query(
-                        new GetIssueStateQuery(issueId),
-                        IssueStateResponse.class
-                ).join();
-
-                // State should be rolled back to pre-command values
-                assertThat(state.assigneeId()).isEqualTo("user-42");  // Not null!
-                assertThat(state.status()).isEqualTo(Status.IN_PROGRESS);  // Not BACKLOG!
-            });
-}
-```
-
-This proves that:
-1. All events from a single command are part of the **same unit of work**
-2. If ANY handler fails, the **entire command fails**
-3. The **entity state is rolled back** - verified by querying after the failure
-4. **No events are persisted** to the event store
-
-## Implications for LiveStore
-
-This demonstration proves that in a mature, production-tested event sourcing framework:
-
-- **All events from a single command are committed atomically**
-- **If any handler fails, all state changes are rolled back**
-- **This is required to maintain aggregate invariants**
-
-The same pattern applies to LiveStore: materializers must commit events atomically to allow aggregates to maintain their invariants during multi-event state transitions.
-
-## Technology Stack
-
-- Java 21
-- Axon Framework 5.0.1
-- JUnit 5 with Axon Test Fixtures
-- Gradle 8.12
 
 ## References
 
