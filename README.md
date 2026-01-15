@@ -4,7 +4,7 @@ This project demonstrates how [Axon Framework 5](https://docs.axoniq.io/) handle
 
 ## Background
 
-This demonstration supports the argument made in [livestorejs/livestore#503](https://github.com/livestorejs/livestore/issues/503) that materializers (equivalent to Axon's event sourcing handlers) must commit events atomically within the same transaction to maintain aggregate invariants.
+This demonstration supports the argument made in [livestorejs/livestore#503](https://github.com/livestorejs/livestore/issues/503#issuecomment-3756227748) that materializers (equivalent to Axon's event sourcing handlers) must commit events atomically within the same transaction to maintain aggregate invariants.
 
 ## Business Domain: Issue Tracker
 
